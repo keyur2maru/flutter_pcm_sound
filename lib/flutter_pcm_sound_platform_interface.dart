@@ -13,6 +13,7 @@ enum IosAudioCategory {
   soloAmbient,
   ambient,
   playback,
+  playAndRecord,
 }
 
 abstract class FlutterPcmSoundPlatform extends PlatformInterface {
