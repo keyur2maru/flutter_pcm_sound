@@ -26,6 +26,10 @@ class FlutterPcmSound {
     return FlutterPcmSoundPlatform.instance.feed(buffer);
   }
 
+  static Future<void> clearBuffer() {
+    return FlutterPcmSoundPlatform.instance.clearBuffer();
+  }
+
   static Future<void> setFeedThreshold(int threshold) {
     return FlutterPcmSoundPlatform.instance.setFeedThreshold(threshold);
   }

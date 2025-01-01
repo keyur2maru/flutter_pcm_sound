@@ -201,6 +201,15 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
   }
 
   @override
+  Future<void> clearBuffer() async {
+    if (_workletNode == null) return;
+
+    final message = _createMessageData('clear', {});
+    _workletNode!.port.postMessage(message);
+    _log('Clear buffer command sent to worklet');
+  }
+
+  @override
   Future<void> release() async {
     if (_workletNode != null) {
       _workletNode!.disconnect();
@@ -273,116 +282,155 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
 
   String _generateProcessorCode() {
     return '''
-    class PCMPlayer extends AudioWorkletProcessor {
-      constructor() {
-        super();
-        console.log('PCMPlayer: Initialized from _generateProcessorCode');
+  class PCMPlayer extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      console.log('PCMPlayer: Initialized from _generateProcessorCode');
+
+      this.buffer = new Float32Array(0);
+      this.channelCount = 1;
+      this.feedThreshold = 4096;
+      this.sampleCount = 0;
+      this.isClearing = false;
+      this.clearingSampleCount = 0;
+      this.samplesUntilClearingDone = 2048; // About 50ms worth of samples at 44.1kHz
+
+      this.port.onmessage = (event) => {
+        const {type, data} = event.data;
+        console.log(`PCMPlayer: Received event of type: \${type}`);
         
-        this.buffer = new Float32Array(0);
-        this.channelCount = 1;
-        this.feedThreshold = 4096;
-        this.sampleCount = 0;
-        
-        this.port.onmessage = (event) => {
-          const {type, data} = event.data;
-          console.log(`PCMPlayer: Received event of type: \${type}`);
-          
-          if (type === 'config') {
-            console.log('PCMPlayer: Received config:', data);
-            if (data.channelCount != null) {
-              this.channelCount = data.channelCount;
-            }
-            if (data.feedThreshold != null) {
-              this.feedThreshold = data.feedThreshold;
-            }
-          } else if (type === 'feed') {
-            console.log('PCMPlayer: Received feed data of length:', data.buffer.byteLength);
-            
-            // Create DataView for proper byte handling
-            const dataView = new DataView(data.buffer);
-            const float32Data = new Float32Array(data.buffer.byteLength / 2);
-            
-            // Convert Int16 to Float32 with proper endianness
-            for (let i = 0; i < float32Data.length; i++) {
-              const int16Sample = dataView.getInt16(i * 2, true); // true = little-endian
-              float32Data[i] = int16Sample / 32768.0;
-            }
-            
-            // Create new buffer with combined data
-            const newBuffer = new Float32Array(this.buffer.length + float32Data.length);
-            newBuffer.set(this.buffer);
-            newBuffer.set(float32Data, this.buffer.length);
-            this.buffer = newBuffer;
-            
-            console.log('PCMPlayer: Buffer state after feed:', {
-              totalSamples: this.buffer.length,
-              nonZeroSamples: this.buffer.reduce((count, sample) => count + (sample !== 0 ? 1 : 0), 0)
-            });
+        if (type === 'config') {
+          console.log('PCMPlayer: Received config:', data);
+          if (data.channelCount != null) {
+            this.channelCount = data.channelCount;
           }
-        };
-      }
+          if (data.feedThreshold != null) {
+            this.feedThreshold = data.feedThreshold;
+          }
+        } else if (type === 'clear') {
+          console.log('PCMPlayer: Clearing buffer');
+          // Set clearing state
+          this.isClearing = true;
+          this.clearingSampleCount = 0;
 
-      process(inputs, outputs) {
-        const output = outputs[0];
-        const channelCount = Math.min(output.length, this.channelCount);
-        const samplesPerChannel = output[0].length;
-        
-        this.sampleCount += samplesPerChannel;
-        
-        // Log processing state periodically
-        if (this.sampleCount % (sampleRate / 2) === 0) { // Log every 0.5 seconds
-          console.log('PCMPlayer: Processing state:', {
-            bufferLength: this.buffer.length,
-            channelCount,
-            samplesPerChannel,
-            totalProcessed: this.sampleCount
-          });
-        }
+          // Clear existing buffer
+          this.buffer = new Float32Array(0);
 
-        if (this.buffer.length < this.feedThreshold) {
+          // Notify that buffer was cleared
           this.port.postMessage({
-            type: 'needMore',
-            remaining: this.buffer.length
+            type: 'bufferCleared'
           });
-        }
-
-        if (this.buffer.length === 0) {
-          for (let channel = 0; channel < channelCount; channel++) {
-            output[channel].fill(0);
+        } else if (type === 'feed') {
+          // Drop incoming audio during clearing state
+          if (this.isClearing) {
+            console.log('PCMPlayer: Dropping feed during clear operation');
+            return;
           }
-          return true;
-        }
 
-        let didOutput = false;
-        for (let channel = 0; channel < channelCount; channel++) {
-          const outputChannel = output[channel];
-          
-          if (this.buffer.length >= outputChannel.length) {
-            outputChannel.set(this.buffer.subarray(0, outputChannel.length));
-            this.buffer = this.buffer.subarray(outputChannel.length);
-            didOutput = true;
-          } else {
-            outputChannel.set(this.buffer);
-            outputChannel.fill(0, this.buffer.length);
-            this.buffer = new Float32Array(0);
-            didOutput = true;
+          console.log('PCMPlayer: Received feed data of length:', data.buffer.byteLength);
+
+          // Create DataView for proper byte handling
+          const dataView = new DataView(data.buffer);
+          const float32Data = new Float32Array(data.buffer.byteLength / 2);
+
+          // Convert Int16 to Float32 with proper endianness
+          for (let i = 0; i < float32Data.length; i++) {
+            const int16Sample = dataView.getInt16(i * 2, true); // true = little-endian
+            float32Data[i] = int16Sample / 32768.0;
           }
-        }
 
-        if (didOutput && this.sampleCount % (sampleRate / 10) === 0) {
-          console.log('PCMPlayer: Audio output active:', {
-            remainingBuffer: this.buffer.length,
-            didOutput,
-            timestamp: currentTime
-          });
+          // Create new buffer with combined data
+          const newBuffer = new Float32Array(this.buffer.length + float32Data.length);
+          newBuffer.set(this.buffer);
+          newBuffer.set(float32Data, this.buffer.length);
+          this.buffer = newBuffer;
         }
-
-        return true;
-      }
+      };
     }
 
-    registerProcessor('pcm-player', PCMPlayer);
-  ''';
+    process(inputs, outputs) {
+      const output = outputs[0];
+      const channelCount = Math.min(output.length, this.channelCount);
+      const samplesPerChannel = output[0].length;
+
+      this.sampleCount += samplesPerChannel;
+
+      // Handle clearing state
+      if (this.isClearing) {
+        this.clearingSampleCount += samplesPerChannel;
+        if (this.clearingSampleCount >= this.samplesUntilClearingDone) {
+          console.log('PCMPlayer: Clearing state complete');
+          this.isClearing = false;
+          this.clearingSampleCount = 0;
+        }
+
+        // Output silence during clearing
+        for (let channel = 0; channel < channelCount; channel++) {
+          output[channel].fill(0);
+        }
+        return true;
+      }
+
+      // Log processing state periodically
+      if (this.sampleCount % (sampleRate / 2) === 0) {
+        console.log('PCMPlayer: Processing state:', {
+          bufferLength: this.buffer.length,
+          channelCount,
+          samplesPerChannel,
+          totalProcessed: this.sampleCount,
+          isClearing: this.isClearing
+        });
+      }
+
+      // Request more data if buffer is running low
+      if (this.buffer.length < this.feedThreshold) {
+        this.port.postMessage({
+          type: 'needMore',
+          remaining: this.buffer.length
+        });
+      }
+
+      // Output silence if buffer is empty
+      if (this.buffer.length === 0) {
+        for (let channel = 0; channel < channelCount; channel++) {
+          output[channel].fill(0);
+        }
+        return true;
+      }
+
+      // Process audio data
+      let didOutput = false;
+      for (let channel = 0; channel < channelCount; channel++) {
+        const outputChannel = output[channel];
+
+        if (this.buffer.length >= outputChannel.length) {
+          outputChannel.set(this.buffer.subarray(0, outputChannel.length));
+          this.buffer = this.buffer.subarray(outputChannel.length);
+          didOutput = true;
+        } else {
+          outputChannel.set(this.buffer);
+          outputChannel.fill(0, this.buffer.length);
+          this.buffer = new Float32Array(0);
+          didOutput = true;
+        }
+      }
+
+      // Log output state periodically
+      if (didOutput && this.sampleCount % (sampleRate / 10) === 0) {
+        console.log('PCMPlayer: Audio output active:', {
+          remainingBuffer: this.buffer.length,
+          didOutput,
+          timestamp: currentTime,
+          isClearing: this.isClearing
+        });
+      }
+
+      return true;
+    }
+  }
+
+  registerProcessor('pcm-player', PCMPlayer);
+''';
   }
 
   void _log(String message, [LogLevel level = LogLevel.standard]) {

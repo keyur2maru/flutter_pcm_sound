@@ -35,6 +35,11 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
   }
 
   @override
+  Future<void> clearBuffer() async {
+    return _invokeMethod('clearBuffer');
+  }
+
+  @override
   Future<void> setFeedThreshold(int threshold) async {
     return _invokeMethod('setFeedThreshold', {'feed_threshold': threshold});
   }

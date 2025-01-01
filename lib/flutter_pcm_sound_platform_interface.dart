@@ -46,6 +46,10 @@ abstract class FlutterPcmSoundPlatform extends PlatformInterface {
     throw UnimplementedError('feed() has not been implemented.');
   }
 
+  Future<void> clearBuffer() {
+    throw UnimplementedError('clearBuffer() has not been implemented.');
+  }
+
   Future<void> setFeedThreshold(int threshold) {
     throw UnimplementedError('setFeedThreshold() has not been implemented.');
   }
