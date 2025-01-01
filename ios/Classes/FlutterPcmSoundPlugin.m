@@ -235,6 +235,24 @@ typedef NS_ENUM(NSUInteger, LogLevel) {
 
             result(@(true));
         }
+        else if ([@"clearBuffer" isEqualToString:call.method])
+        {
+            // setup check
+            if (self.mDidSetup == false) {
+                result([FlutterError errorWithCode:@"Setup" message:@"must call setup first" details:nil]);
+                return;
+            }
+
+            // Stop current playback
+            [self stopAudioUnit];
+
+            // Clear the buffer
+            @synchronized (self.mSamples) {
+                self.mSamples = [NSMutableData new];
+            }
+
+            result(@(true));
+        }
         else if([@"release" isEqualToString:call.method])
         {
             [self cleanup];

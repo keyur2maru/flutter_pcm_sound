@@ -188,6 +188,32 @@ public class FlutterPcmSoundPlugin implements
                     result.success(true);
                     break;
                 }
+                case "clearBuffer": {
+                    // Check setup
+                    if (mDidSetup == false) {
+                        result.error("Setup", "must call setup first", null);
+                        return;
+                    }
+
+                    // Synchronize to prevent race conditions with playback thread
+                    synchronized (mSamples) {
+                        // Stop AudioTrack
+                        mAudioTrack.stop();
+                        mAudioTrack.flush();
+
+                        // Clear the sample queue
+                        mSamples.clear();
+
+                        // Reset callback flag
+                        mDidInvokeFeedCallback = false;
+
+                        // Restart AudioTrack
+                        mAudioTrack.play();
+                    }
+
+                    result.success(true);
+                    break;
+                }
                 case "setFeedThreshold": {
                     mFeedThreshold = ((Number) call.argument("feed_threshold")).longValue();
                     result.success(true);
@@ -268,18 +294,22 @@ public class FlutterPcmSoundPlugin implements
             try {
                 // blocks indefinitely until new data
                 data = mSamples.take();
+
+                // Synchronize write operation
+                synchronized (mSamples) {
+                    if (!mShouldCleanup) {  // Check again inside sync block
+                        mAudioTrack.write(data, data.remaining(), AudioTrack.WRITE_BLOCKING);
+                    }
+                }
+
+                // invoke feed callback?
+                if (mRemainingFrames() <= mFeedThreshold && !mDidInvokeFeedCallback) {
+                    mDidInvokeFeedCallback = true;
+                    mainThreadHandler.post(this::invokeFeedCallback);
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 continue;
-            }
-
-            // write
-            mAudioTrack.write(data, data.remaining(), AudioTrack.WRITE_BLOCKING);
-
-            // invoke feed callback?
-            if (mRemainingFrames() <= mFeedThreshold && !mDidInvokeFeedCallback) {
-                mDidInvokeFeedCallback = true;
-                mainThreadHandler.post(this::invokeFeedCallback);
             }
         }
 
@@ -288,7 +318,6 @@ public class FlutterPcmSoundPlugin implements
         mAudioTrack.release();
         mAudioTrack = null;
     }
-
 
     private List<ByteBuffer> split(byte[] buffer, int maxSize) {
         List<ByteBuffer> chunks = new ArrayList<>();
