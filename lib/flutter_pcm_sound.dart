@@ -10,6 +10,10 @@ class FlutterPcmSound {
     return FlutterPcmSoundPlatform.instance.setLogLevel(level);
   }
 
+  static Future<void> resumeAudioContext() {
+    return FlutterPcmSoundPlatform.instance.resumeAudioContext();
+  }
+
   static Future<void> setup({
     required int sampleRate,
     required int channelCount,

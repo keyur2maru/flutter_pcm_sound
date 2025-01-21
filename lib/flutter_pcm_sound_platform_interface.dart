@@ -42,6 +42,10 @@ abstract class FlutterPcmSoundPlatform extends PlatformInterface {
     throw UnimplementedError('setup() has not been implemented.');
   }
 
+  Future<void> resumeAudioContext() {
+    throw UnimplementedError('resumeAudioContext() has not been implemented.');
+  }
+
   Future<void> feed(PcmArrayInt16 buffer) {
     throw UnimplementedError('feed() has not been implemented.');
   }

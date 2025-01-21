@@ -23,17 +23,51 @@ class PcmSoundApp extends StatefulWidget {
 class _PcmSoundAppState extends State<PcmSoundApp> {
 
   static const int sampleRate = 48000;
-
+  bool _isAudioReady = false;
   int _remainingFrames = 0;
+  bool _isPlaying = false;
+
   MajorScale scale = MajorScale(sampleRate: sampleRate, noteDuration: 0.20);
 
   @override
   void initState() {
+    WidgetsFlutterBinding.ensureInitialized();
     super.initState();
-    FlutterPcmSound.setLogLevel(LogLevel.verbose);
-    FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: 1);
-    FlutterPcmSound.setFeedThreshold(sampleRate ~/ 10);
+    _initializeAudio();
+  }
+
+  Future<void> _initializeAudio() async {
+    try {
+      await FlutterPcmSound.setLogLevel(LogLevel.verbose);
+      await FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: 1);
+      await FlutterPcmSound.setFeedThreshold(sampleRate ~/ 10);
+    } catch (e) {
+      print('Failed to initialize audio: $e');
+    }
+  }
+
+  Future<void> _startAudio() async {
+    try {
+      await FlutterPcmSound.resumeAudioContext();
+      setState(() => _isAudioReady = true);
+    } catch (e) {
+      print('Failed to start audio: $e');
+    }
+  }
+
+  Future<void> _playAudio() async {
+    if (!_isAudioReady) {
+      await _startAudio();
+    }
+    setState(() => _isPlaying = true);
     FlutterPcmSound.setFeedCallback(_onFeed);
+    _onFeed(0);
+  }
+
+  void _stopAudio() {
+    setState(() => _isPlaying = false);
+    FlutterPcmSound.setFeedCallback(null);
+    setState(() => _remainingFrames = 0);
   }
 
   @override
@@ -50,11 +84,10 @@ class _PcmSoundAppState extends State<PcmSoundApp> {
     await FlutterPcmSound.feed(PcmArrayInt16.fromList(frames));
   }
 
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: Scaffold(
         appBar: AppBar(
           centerTitle: true,
@@ -64,23 +97,23 @@ class _PcmSoundAppState extends State<PcmSoundApp> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              if (!_isAudioReady)
+                ElevatedButton(
+                  onPressed: _startAudio,
+                  child: Text('Initialize Audio'),
+                ),
               ElevatedButton(
-                onPressed: () {
-                  FlutterPcmSound.setFeedCallback(_onFeed);
-                  _onFeed(0); // start feeding
-                },
+                onPressed: _isPlaying ? null : _playAudio,
                 child: Text('Play'),
               ),
               ElevatedButton(
-                onPressed: () {
-                  FlutterPcmSound.setFeedCallback(null); // stop
-                  setState(() {
-                    _remainingFrames = 0;
-                  });
-                },
+                onPressed: _isPlaying ? _stopAudio : null,
                 child: Text('Stop'),
               ),
-              Text('$_remainingFrames Remaining Frames')
+              Text('$_remainingFrames Remaining Frames'),
+              if (!_isAudioReady)
+                Text('Click Initialize Audio to start',
+                    style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),

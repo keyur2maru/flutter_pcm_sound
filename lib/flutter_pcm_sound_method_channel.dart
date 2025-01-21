@@ -13,6 +13,11 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
   }
 
   @override
+  Future<void> resumeAudioContext() async {
+    return _invokeMethod('resumeAudioContext');
+  }
+
+  @override
   Future<void> setup({
     required int sampleRate,
     required int channelCount,

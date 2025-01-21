@@ -30,8 +30,8 @@ extension type AudioContext._(JSObject _) implements JSObject {
   external AudioWorklet get audioWorklet;
   external JSAny get destination;
   external JSString get state;
-  external JSPromise get resume;
-  external JSPromise get close;
+  external JSFunction get resume;
+  external JSFunction get close;
 }
 
 extension type AudioWorklet._(JSObject _) implements JSObject {
@@ -60,6 +60,11 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
   AudioWorkletNode? _workletNode;
   Function(int)? _onFeedCallback;
   LogLevel _logLevel = LogLevel.standard;
+  bool _isInitialized = false;
+  Completer<void>? _setupCompleter;
+  bool get isReady => _audioContext?.state.toDart == 'running';
+  int? _pendingSampleRate;
+  int? _pendingChannelCount;
 
   @override
   Future<void> setLogLevel(LogLevel level) async {
@@ -68,44 +73,162 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
   }
 
   @override
+  Future<void> resumeAudioContext() async {
+    if (!_isInitialized) {
+      throw Exception('PCM Sound not initialized');
+    }
+
+    try {
+      // Initialize context if needed
+      if (_audioContext == null) {
+        await _initializeAudioContext();
+      }
+
+      if (_audioContext!.state.toDart != 'running') {
+        final resumeFunc = _audioContext!.resume;
+        final jsThis = _audioContext as JSObject;
+        await (resumeFunc.callAsFunction(jsThis) as JSPromise).toDart;
+        _log('AudioContext resumed successfully');
+      }
+    } catch (e) {
+      _log('Failed to resume AudioContext: $e', LogLevel.error);
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> setup({
     required int sampleRate,
     required int channelCount,
     IosAudioCategory iosAudioCategory = IosAudioCategory.playback
   }) async {
+    if (_setupCompleter?.isCompleted == false) {
+      return _setupCompleter!.future;
+    }
+    _setupCompleter = Completer<void>();
+
     try {
-      print('Setting up PCM Sound with sample rate: $sampleRate, channel count: $channelCount');
-      // Create AudioContext
+      _log('Setting up PCM Sound with sample rate: $sampleRate, channel count: $channelCount');
+
+      // Store parameters for later initialization
+      _pendingSampleRate = sampleRate;
+      _pendingChannelCount = channelCount;
+      _isInitialized = true;
+      _setupCompleter?.complete();
+
+      _log('PCM Sound setup completed');
+
+    } catch (e) {
+      _log('Failed to setup PCM Sound: $e', LogLevel.error);
+      _setupCompleter?.completeError(e);
+      await release();
+      rethrow;
+    }
+  }
+
+  Future<void> _initializeAudioContext() async {
+    if (_isIOSBrowser()) {
+      _log('Initializing on iOS WebKit-based browser');
+      try {
+        if (_audioContext == null) {
+          final ctx = _audioContextConstructor.callAsConstructor({
+            'sampleRate': _pendingSampleRate,
+            'latencyHint': 'playback'
+          }.jsify());
+
+          if (ctx == null) throw Exception('Failed to create AudioContext');
+          _audioContext = ctx as AudioContext;
+
+          // Force a user interaction before proceeding
+          await _ensureUserGesture();
+
+          // Initialize worklet with additional error handling
+          await _initializeWorkletSafely(_pendingChannelCount!);
+        }
+      } catch (e) {
+        _log('iOS AudioContext initialization failed: $e', LogLevel.error);
+        rethrow;
+      }
+    } else {
       if (_audioContext == null) {
         final ctx = _audioContextConstructor.callAsConstructor({
-          'sampleRate': sampleRate
+          'sampleRate': _pendingSampleRate
         }.jsify());
         if (ctx == null) throw Exception('Failed to create AudioContext');
         _audioContext = ctx as AudioContext;
-      }
 
-      // Get state as string and compare
-      final state = _audioContext!.state.toDart as String;
-      if (state == 'suspended') {
-        await _audioContext!.resume.toDart;
+        // Initialize worklet after creating context
+        await _initializeWorklet(_pendingChannelCount!);
       }
-      print('AudioContext state: $state');
+    }
+  }
 
-      // Create worklet processor code
+  bool _isIOSBrowser() {
+    final userAgent = window.navigator.userAgent.toLowerCase();
+    return userAgent.contains('iphone') || userAgent.contains('ipad') || userAgent.contains('ipod');
+  }
+
+  Future<void> _ensureUserGesture() async {
+    if (_audioContext?.state.toDart != 'running') {
+      _log('Waiting for user gesture to enable audio...');
+      // You might want to show UI here requesting user interaction
+      final resumeFunc = _audioContext!.resume;
+      final jsThis = _audioContext as JSObject;
+      try {
+        await (resumeFunc.callAsFunction(jsThis) as JSPromise).toDart;
+      } catch (e) {
+        _log('Resume failed: $e', LogLevel.error);
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> _initializeWorkletSafely(int channelCount) async {
+    try {
       final processorCode = _generateProcessorCode();
       final blob = _createBlob(processorCode);
       final url = _createObjectURL(blob);
-      if (url.isEmpty) throw Exception('Failed to create object URL');
 
       try {
-        // Load the worklet module
-        await _audioContext!.audioWorklet.addModule(url).toDart;
+        final workletPromise = _audioContext!.audioWorklet.addModule(url);
+        if (workletPromise == null) {
+          throw Exception('AudioWorklet.addModule returned null');
+        }
+
+        _log('Waiting for worklet module to load...');
+        await workletPromise.toDart;
+        _log('Worklet module loaded successfully');
+
+        final options = _createWorkletOptions(channelCount);
+        final node = _audioWorkletNodeConstructor.callAsConstructor(
+            _audioContext,
+            'pcm-player'.toJS,
+            options
+        );
+
+        if (node == null) throw Exception('Failed to create AudioWorkletNode');
+        _workletNode = node as AudioWorkletNode;
+
+        _setupMessageHandling();
+        _workletNode!.connect(_audioContext!.destination);
+
       } finally {
-        // Always cleanup URL
         _revokeObjectURL(url);
       }
+    } catch (e) {
+      _log('Worklet initialization failed: $e', LogLevel.error);
+      rethrow;
+    }
+  }
 
-      // Create worklet node
+  Future<void> _initializeWorklet(int channelCount) async {
+    final processorCode = _generateProcessorCode();
+    final blob = _createBlob(processorCode);
+    final url = _createObjectURL(blob);
+
+    try {
+      await _audioContext!.audioWorklet.addModule(url).toDart;
+
       final options = _createWorkletOptions(channelCount);
       final node = _audioWorkletNodeConstructor.callAsConstructor(
           _audioContext,
@@ -114,33 +237,29 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
       );
 
       if (node == null) throw Exception('Failed to create AudioWorkletNode');
-      print('Worklet node created: $node');
       _workletNode = node as AudioWorkletNode;
 
-      // Setup message handling
       _setupMessageHandling();
-
-      // Connect to destination
       _workletNode!.connect(_audioContext!.destination);
 
-      // Send initial configuration
       final configMessage = _createMessageData('config', {
         'channelCount': channelCount,
       });
       _workletNode!.port.postMessage(configMessage);
 
-      _log('PCM Sound initialized');
-    } catch (e) {
-      _log('Failed to initialize PCM Sound: $e', LogLevel.error);
-      await release();
-      rethrow;
+    } finally {
+      _revokeObjectURL(url);
     }
   }
 
   @override
   Future<void> feed(PcmArrayInt16 buffer) async {
-    if (_workletNode == null) {
+    if (!_isInitialized || _workletNode == null) {
       throw Exception('PCM Sound not initialized');
+    }
+
+    if (_audioContext?.state.toDart != 'running') {
+      _log('Warning: AudioContext not running, audio may not play', LogLevel.error);
     }
 
     final bufferLength = buffer.bytes.lengthInBytes;
@@ -218,7 +337,7 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
 
     if (_audioContext != null) {
       try {
-        await _audioContext!.close.toDart;
+        await (_audioContext!.close.callAsFunction() as JSPromise).toDart;
       } catch (e) {
         _log('Error closing AudioContext: $e', LogLevel.error);
       }
