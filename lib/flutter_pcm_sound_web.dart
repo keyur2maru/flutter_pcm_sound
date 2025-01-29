@@ -191,9 +191,6 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
 
       try {
         final workletPromise = _audioContext!.audioWorklet.addModule(url);
-        if (workletPromise == null) {
-          throw Exception('AudioWorklet.addModule returned null');
-        }
 
         _log('Waiting for worklet module to load...');
         await workletPromise.toDart;
@@ -337,7 +334,9 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
 
     if (_audioContext != null) {
       try {
-        await (_audioContext!.close.callAsFunction() as JSPromise).toDart;
+        final closeFunc = _audioContext!.close;
+        final jsThis = _audioContext as JSObject;
+        await (closeFunc.callAsFunction(jsThis) as JSPromise).toDart;
       } catch (e) {
         _log('Error closing AudioContext: $e', LogLevel.error);
       }
@@ -393,8 +392,7 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
   }
 
   JSObject _createBlob(String content) {
-    final array = JSArray<JSString>.withLength(1);
-    array[0] = content.toJS;
+    final array = [content].jsify() as JSArray;
     final options = {'type': 'text/javascript'}.jsify() as JSObject;
     return _blobConstructor.callAsConstructor(array, options);
   }

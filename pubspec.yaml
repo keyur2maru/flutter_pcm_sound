@@ -4,7 +4,7 @@ version: 3.1.2
 homepage: https://github.com/chipweinberger/flutter_pcm_sound
 
 environment:
-  sdk: ">=3.6.0 <4.0.0"
+  sdk: ">=3.4.1 <4.0.0"
   flutter: ">=2.5.0"
 
 dependencies:

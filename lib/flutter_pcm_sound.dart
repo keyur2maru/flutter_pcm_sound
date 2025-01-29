@@ -43,7 +43,6 @@ class FlutterPcmSound {
   }
 
   static void start() {
-    assert(FlutterPcmSoundPlatform.instance != null);
     FlutterPcmSoundPlatform.instance.setFeedCallback((remainingFrames) {
       onFeedSamplesCallback?.call(remainingFrames);
     });
