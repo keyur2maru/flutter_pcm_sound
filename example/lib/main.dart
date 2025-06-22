@@ -1,9 +1,10 @@
+// ignore_for_file: avoid_print
 
 import 'package:flutter/material.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -11,17 +12,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PcmSoundApp();
+    return const PcmSoundApp();
   }
 }
 
 class PcmSoundApp extends StatefulWidget {
+  const PcmSoundApp({Key? key}) : super(key: key);
+
   @override
-  _PcmSoundAppState createState() => _PcmSoundAppState();
+  PcmSoundAppState createState() => PcmSoundAppState();
 }
 
-class _PcmSoundAppState extends State<PcmSoundApp> {
-
+class PcmSoundAppState extends State<PcmSoundApp> {
   static const int sampleRate = 48000;
   bool _isAudioReady = false;
   int _remainingFrames = 0;
@@ -91,7 +93,7 @@ class _PcmSoundAppState extends State<PcmSoundApp> {
       home: Scaffold(
         appBar: AppBar(
           centerTitle: true,
-          title: Text('Flutter PCM Sound'),
+          title: const Text('Flutter PCM Sound'),
         ),
         body: Center(
           child: Column(
@@ -100,19 +102,19 @@ class _PcmSoundAppState extends State<PcmSoundApp> {
               if (!_isAudioReady)
                 ElevatedButton(
                   onPressed: _startAudio,
-                  child: Text('Initialize Audio'),
+                  child: const Text('Initialize Audio'),
                 ),
               ElevatedButton(
                 onPressed: _isPlaying ? null : _playAudio,
-                child: Text('Play'),
+                child: const Text('Play'),
               ),
               ElevatedButton(
                 onPressed: _isPlaying ? _stopAudio : null,
-                child: Text('Stop'),
+                child: const Text('Stop'),
               ),
               Text('$_remainingFrames Remaining Frames'),
               if (!_isAudioReady)
-                Text('Click Initialize Audio to start',
+                const Text('Click Initialize Audio to start',
                     style: TextStyle(color: Colors.grey)),
             ],
           ),

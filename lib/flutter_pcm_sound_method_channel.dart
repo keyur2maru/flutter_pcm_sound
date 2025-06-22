@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/services.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 
@@ -18,11 +20,10 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
   }
 
   @override
-  Future<void> setup({
-    required int sampleRate,
-    required int channelCount,
-    IosAudioCategory iosAudioCategory = IosAudioCategory.playback
-  }) async {
+  Future<void> setup(
+      {required int sampleRate,
+      required int channelCount,
+      IosAudioCategory iosAudioCategory = IosAudioCategory.playback}) async {
     return _invokeMethod('setup', {
       'sample_rate': sampleRate,
       'num_channels': channelCount,
@@ -32,16 +33,14 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
 
   @override
   Future<void> feed(PcmArrayInt16 buffer) async {
-    final Uint8List rawBytes = buffer.bytes.buffer.asUint8List(
-        buffer.bytes.offsetInBytes,
-        buffer.bytes.lengthInBytes
-    );
+    final Uint8List rawBytes = buffer.bytes.buffer
+        .asUint8List(buffer.bytes.offsetInBytes, buffer.bytes.lengthInBytes);
     return _invokeMethod('feed', {'buffer': rawBytes});
   }
 
   @override
-  Future<void> clearBuffer() async {
-    return _invokeMethod('clearBuffer');
+  Future<void> clearBuffer({bool force = false}) async {
+    return _invokeMethod('clearBuffer', {'force': force});
   }
 
   @override
@@ -66,7 +65,8 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
       if (method == 'feed') {
         Uint8List data = arguments['buffer'];
         if (data.lengthInBytes > 6) {
-          args = '(${data.lengthInBytes ~/ 2} samples) ${data.sublist(0, 6)} ...';
+          args =
+              '(${data.lengthInBytes ~/ 2} samples) ${data.sublist(0, 6)} ...';
         } else {
           args = '(${data.lengthInBytes ~/ 2} samples) $data';
         }

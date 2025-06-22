@@ -34,11 +34,10 @@ abstract class FlutterPcmSoundPlatform extends PlatformInterface {
     throw UnimplementedError('setLogLevel() has not been implemented.');
   }
 
-  Future<void> setup({
-    required int sampleRate,
-    required int channelCount,
-    IosAudioCategory iosAudioCategory = IosAudioCategory.playback
-  }) {
+  Future<void> setup(
+      {required int sampleRate,
+      required int channelCount,
+      IosAudioCategory iosAudioCategory = IosAudioCategory.playback}) {
     throw UnimplementedError('setup() has not been implemented.');
   }
 
@@ -50,7 +49,7 @@ abstract class FlutterPcmSoundPlatform extends PlatformInterface {
     throw UnimplementedError('feed() has not been implemented.');
   }
 
-  Future<void> clearBuffer() {
+  Future<void> clearBuffer({bool force = false}) {
     throw UnimplementedError('clearBuffer() has not been implemented.');
   }
 

@@ -14,11 +14,10 @@ class FlutterPcmSound {
     return FlutterPcmSoundPlatform.instance.resumeAudioContext();
   }
 
-  static Future<void> setup({
-    required int sampleRate,
-    required int channelCount,
-    IosAudioCategory iosAudioCategory = IosAudioCategory.playback
-  }) {
+  static Future<void> setup(
+      {required int sampleRate,
+      required int channelCount,
+      IosAudioCategory iosAudioCategory = IosAudioCategory.playback}) {
     return FlutterPcmSoundPlatform.instance.setup(
       sampleRate: sampleRate,
       channelCount: channelCount,
@@ -30,8 +29,8 @@ class FlutterPcmSound {
     return FlutterPcmSoundPlatform.instance.feed(buffer);
   }
 
-  static Future<void> clearBuffer() {
-    return FlutterPcmSoundPlatform.instance.clearBuffer();
+  static Future<void> clearBuffer({bool force = false}) {
+    return FlutterPcmSoundPlatform.instance.clearBuffer(force: force);
   }
 
   static Future<void> setFeedThreshold(int threshold) {
@@ -65,7 +64,16 @@ class MajorScale {
 
   // C Major Scale (Just Intonation)
   List<double> get scale {
-    List<double> c = [261.63, 294.33, 327.03, 348.83, 392.44, 436.05, 490.55, 523.25];
+    List<double> c = [
+      261.63,
+      294.33,
+      327.03,
+      348.83,
+      392.44,
+      436.05,
+      490.55,
+      523.25
+    ];
     return [c[0]] + c + c.reversed.toList().sublist(0, c.length - 1);
   }
 
@@ -98,14 +106,20 @@ class MajorScale {
   }
 
   // generate a sine wave
-  List<int> cosineWave({int periods = 1, int sampleRate = 44100, double freq = 440, double volume = 0.5}) {
+  List<int> cosineWave(
+      {int periods = 1,
+      int sampleRate = 44100,
+      double freq = 440,
+      double volume = 0.5}) {
     final period = 1.0 / freq;
     final nFramesPerPeriod = (period * sampleRate).toInt();
     final totalFrames = nFramesPerPeriod * periods;
     final step = math.pi * 2 / nFramesPerPeriod;
     List<int> data = List.filled(totalFrames, 0);
     for (int i = 0; i < totalFrames; i++) {
-      data[i] = (math.cos(step * (i % nFramesPerPeriod)) * volume * 32768).toInt() - 16384;
+      data[i] =
+          (math.cos(step * (i % nFramesPerPeriod)) * volume * 32768).toInt() -
+              16384;
     }
     return data;
   }
@@ -119,7 +133,11 @@ class MajorScale {
     List<int> frames = [];
     for (int i = 0; i < periods; i++) {
       _periodCount %= _periodsForScale;
-      frames += cosineWave(periods: 1, sampleRate: sampleRate, freq: scale[noteIdx], volume: volume);
+      frames += cosineWave(
+          periods: 1,
+          sampleRate: sampleRate,
+          freq: scale[noteIdx],
+          volume: volume);
       _periodCount++;
     }
     return frames;
