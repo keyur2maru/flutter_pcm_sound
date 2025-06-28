@@ -1,6 +1,6 @@
-import 'package:flutter_pcm_sound/pcm_array_int16.dart';
+import 'package:flutter_pcm_sound_fork/pcm_array_int16.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'package:flutter_pcm_sound/flutter_pcm_sound_method_channel.dart';
+import 'package:flutter_pcm_sound_fork/flutter_pcm_sound_method_channel.dart';
 
 enum LogLevel {
   none,
@@ -63,5 +63,13 @@ abstract class FlutterPcmSoundPlatform extends PlatformInterface {
 
   void setFeedCallback(Function(int)? callback) {
     throw UnimplementedError('setFeedCallback() has not been implemented.');
+  }
+
+  Future<void> setVolume(double volume) {
+    throw UnimplementedError('setVolume() has not been implemented.');
+  }
+
+  Future<double> getVolume() {
+    throw UnimplementedError('getVolume() has not been implemented.');
   }
 }

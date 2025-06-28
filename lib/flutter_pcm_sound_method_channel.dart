@@ -1,7 +1,8 @@
 // ignore_for_file: avoid_print
 
 import 'package:flutter/services.dart';
-import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
+import 'package:flutter_pcm_sound_fork/flutter_pcm_sound_platform_interface.dart';
+import 'package:flutter_pcm_sound_fork/pcm_array_int16.dart';
 
 class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
   final methodChannel = const MethodChannel('flutter_pcm_sound/methods');
@@ -94,5 +95,18 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
       default:
         print('Method not implemented');
     }
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    // Clamp volume between 0.0 and 1.0
+    final clampedVolume = volume.clamp(0.0, 1.0);
+    return _invokeMethod('setVolume', {'volume': clampedVolume});
+  }
+
+  @override
+  Future<double> getVolume() async {
+    final result = await _invokeMethod<double>('getVolume');
+    return result ?? 1.0;
   }
 }

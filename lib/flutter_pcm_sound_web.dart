@@ -5,8 +5,8 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:flutter_pcm_sound/flutter_pcm_sound_platform_interface.dart';
-import 'package:flutter_pcm_sound/pcm_array_int16.dart';
+import 'package:flutter_pcm_sound_fork/flutter_pcm_sound_platform_interface.dart';
+import 'package:flutter_pcm_sound_fork/pcm_array_int16.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart';
 
@@ -71,6 +71,7 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
   bool get isReady => _audioContext?.state.toDart == 'running';
   int? _pendingSampleRate;
   int? _pendingChannelCount;
+  double _volume = 1.0;
 
   @override
   Future<void> setLogLevel(LogLevel level) async {
@@ -232,6 +233,7 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
         final configMessage = _createMessageData('config', {
           'channelCount': channelCount,
           'logLevel': _logLevel.index,
+          'volume': _volume,
         });
         _workletNode!.port.postMessage(configMessage);
       } finally {
@@ -267,6 +269,7 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
       final configMessage = _createMessageData('config', {
         'channelCount': channelCount,
         'logLevel': _logLevel.index,
+        'volume': _volume,
       });
       _workletNode!.port.postMessage(configMessage);
     } finally {
@@ -435,6 +438,7 @@ class PCMPlayer extends AudioWorkletProcessor {
     this.clearingSampleCount = 0;
     this.samplesUntilClearingDone = 128; // Reduced for faster clearing (about 3ms)
     this.logLevel = 2; // Default to standard logging (LogLevel.standard.index)
+    this.volume = 1.0; // Default volume
 
     // Log level constants matching Dart LogLevel enum
     this.LOG_NONE = 0;
@@ -466,6 +470,12 @@ class PCMPlayer extends AudioWorkletProcessor {
         if (data.logLevel != null) {
           this.logLevel = data.logLevel;
         }
+        if (data.volume != null) {
+          this.volume = Math.max(0.0, Math.min(1.0, data.volume));
+        }
+      } else if (type === 'setVolume') {
+        this.log('PCMPlayer: Setting volume to: ' + data.volume);
+        this.volume = Math.max(0.0, Math.min(1.0, data.volume));
       } else if (type === 'clear') {
         this.log('PCMPlayer: Clearing buffer with priority: ' + (data.force ? 'HIGH' : 'normal'));
         this.isClearing = true;
@@ -561,11 +571,18 @@ class PCMPlayer extends AudioWorkletProcessor {
       const outputChannel = output[channel];
 
       if (this.buffer.length >= outputChannel.length) {
-        outputChannel.set(this.buffer.subarray(0, outputChannel.length));
+        const audioData = this.buffer.subarray(0, outputChannel.length);
+        // Apply volume control
+        for (let i = 0; i < audioData.length; i++) {
+          outputChannel[i] = audioData[i] * this.volume;
+        }
         this.buffer = this.buffer.subarray(outputChannel.length);
         didOutput = true;
       } else {
-        outputChannel.set(this.buffer);
+        // Apply volume control to remaining buffer
+        for (let i = 0; i < this.buffer.length; i++) {
+          outputChannel[i] = this.buffer[i] * this.volume;
+        }
         outputChannel.fill(0, this.buffer.length);
         this.buffer = new Float32Array(0);
         didOutput = true;
@@ -588,6 +605,21 @@ class PCMPlayer extends AudioWorkletProcessor {
 
 registerProcessor('pcm-player', PCMPlayer);
 ''';
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    _volume = volume.clamp(0.0, 1.0);
+    
+    if (_workletNode != null) {
+      final message = _createMessageData('setVolume', {'volume': _volume});
+      _workletNode!.port.postMessage(message);
+    }
+  }
+
+  @override
+  Future<double> getVolume() async {
+    return _volume;
   }
 
   void _log(String message, [LogLevel level = LogLevel.standard]) {
