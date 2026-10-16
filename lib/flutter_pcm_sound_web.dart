@@ -183,9 +183,7 @@ class FlutterPcmSoundWeb extends FlutterPcmSoundPlatform {
 
   bool _isIOSBrowser() {
     final userAgent = window.navigator.userAgent.toLowerCase();
-    return userAgent.contains('iphone') ||
-        userAgent.contains('ipad') ||
-        userAgent.contains('ipod');
+    return userAgent.contains('iphone') || userAgent.contains('ipad') || userAgent.contains('ipod');
   }
 
   Future<void> _ensureUserGesture() async {
@@ -610,7 +608,7 @@ registerProcessor('pcm-player', PCMPlayer);
   @override
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 1.0);
-    
+
     if (_workletNode != null) {
       final message = _createMessageData('setVolume', {'volume': _volume});
       _workletNode!.port.postMessage(message);

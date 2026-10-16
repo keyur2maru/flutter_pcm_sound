@@ -63,9 +63,7 @@ class MajorScale {
     final step = math.pi * 2 / nFramesPerPeriod;
     List<int> data = List.filled(totalFrames, 0);
     for (int i = 0; i < totalFrames; i++) {
-      data[i] =
-          (math.cos(step * (i % nFramesPerPeriod)) * volume * 32768).toInt() -
-              16384;
+      data[i] = (math.cos(step * (i % nFramesPerPeriod)) * volume * 32768).toInt() - 16384;
     }
     return data;
   }

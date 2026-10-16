@@ -34,8 +34,7 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
 
   @override
   Future<void> feed(PcmArrayInt16 buffer) async {
-    final Uint8List rawBytes = buffer.bytes.buffer
-        .asUint8List(buffer.bytes.offsetInBytes, buffer.bytes.lengthInBytes);
+    final Uint8List rawBytes = buffer.bytes.buffer.asUint8List(buffer.bytes.offsetInBytes, buffer.bytes.lengthInBytes);
     return _invokeMethod('feed', {'buffer': rawBytes});
   }
 
@@ -66,8 +65,7 @@ class MethodChannelFlutterPcmSound extends FlutterPcmSoundPlatform {
       if (method == 'feed') {
         Uint8List data = arguments['buffer'];
         if (data.lengthInBytes > 6) {
-          args =
-              '(${data.lengthInBytes ~/ 2} samples) ${data.sublist(0, 6)} ...';
+          args = '(${data.lengthInBytes ~/ 2} samples) ${data.sublist(0, 6)} ...';
         } else {
           args = '(${data.lengthInBytes ~/ 2} samples) $data';
         }
