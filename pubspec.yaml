@@ -5,7 +5,7 @@ homepage: https://github.com/keyur2maru/flutter_pcm_sound
 
 environment:
   sdk: ">=3.4.1 <4.0.0"
-  flutter: ">=2.5.0"
+  flutter: ">=3.41.0"
 
 platforms:
   android:
@@ -29,8 +29,10 @@ flutter:
         pluginClass: FlutterPcmSoundPlugin
       ios:
         pluginClass: FlutterPcmSoundPlugin
+        sharedDarwinSource: true
       macos:
         pluginClass: FlutterPcmSoundPlugin
+        sharedDarwinSource: true
       web:
         pluginClass: FlutterPcmSoundWeb
         fileName: flutter_pcm_sound_web.dart

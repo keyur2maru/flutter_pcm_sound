@@ -1,4 +1,7 @@
 .DS_Store
+.build/
+.swiftpm/
+.idea/
 .vscode
 .dart_tool/
 pubspec.lock
